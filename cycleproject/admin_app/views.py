@@ -9,6 +9,15 @@ from django.contrib import messages
 from django.contrib.auth.models import User
 from user_app.models import *
 from . forms import ProductForm,categoryForm,orderForm
+from datetime import datetime
+from django.db.models import Q
+from openpyxl import Workbook
+from django.http.response import JsonResponse
+from django.utils import timezone
+from django.http import HttpResponse
+from django.template.loader import get_template
+from xhtml2pdf import pisa
+
 
 
 
@@ -279,7 +288,175 @@ def deletecp(request,id):
 
 
 
-#-------------------------------------------------------
+#-------------------------------------------------------chart------------------------
+def chart(request):
+    user=User.objects.all().count()   
+    ordercount=order.objects.all().count() 
+    orderlist=orderitem.objects.all()
+    orderlists = orderitem.objects.filter(Q(orderit__status ='Delivered'))
+    Grandtotal=0
+    for item in orderlists:
+    
+        total=item.orderit.total_price
+        Grandtotal=+total+Grandtotal
+    product = []
+    qty = []
+    
+    for items in orderlist:
+        if items.product.name in product:
+            index = product.index(items.product.name)
+            qty[index] += items.quantity
+
+        else:
+            product.append(items.product.name)
+            qty.append(items.quantity)
+
+  
+    context = {
+        'product':product,
+        "qty":qty,
+        'Grandtotal':Grandtotal,
+        'user':user,
+        'ordercount':ordercount,
+    }
+    return render(request,'orders/chart.html',context)
+    
+def filterchart(request):
+    start_date_str = request.GET.get('start_date')
+    end_date_str = request.GET.get('end_date')
+       
+        
+    start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
+    end_date = datetime.strptime(end_date_str, '%Y-%m-%d')
+    
+    orderlist = orderitem.objects.filter(Q(orderit__status ='Confirmed') & Q(orderit__created_at__date__gte = start_date) & Q(orderit__created_at__date__lte = end_date))
+   
+    product = []
+    qty = []
+    
+    for items in orderlist:
+        if items.product.name in product:
+            index = product.index(items.product.name)
+            qty[index] += items.quantity
+
+        else:
+            product.append(items.product.name)
+            qty.append(items.quantity)
+
+ 
+    data = {
+        'product':product,
+        "qty":qty,
+    }
+
+    return JsonResponse(data)
+
+
+#-----------------------salesReport--------------------------------------------------
+def SalesReport(request):
+    if request.method == 'GET':
+        start_date_str = request.GET.get('start_date')
+        end_date_str = request.GET.get('end_date')
+        
+
+    
+        
+        if start_date_str is not None:
+            start_date = datetime.strptime(start_date_str,  '%Y-%m-%d')
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d')
+          
+            orderitemlist = orderitem.objects.filter(Q(orderit__status ='Out_for_delivery') & Q(orderit__created_at__date__gte = start_date) & Q(orderit__created_at__date__lte = end_date))
+           
+        else:
+             orderitemlist = orderitem.objects.filter(Q(orderit__status ='Out_for_delivery') )
+        
+           
+      
+    
+    
+    Grandtotal=0
+    for item in orderitemlist:
+    
+        total=item.orderit.total_price
+        Grandtotal=+total+Grandtotal
+        
+        
+    context={'orderitemlist':orderitemlist,'Grandtotal':Grandtotal}
+    return render(request,'orders/salesreport.html',context)
+
+def excel_sales_report(request):
+    month=timezone.now().month
+    if request.method == 'GET':
+        start_date_str = request.GET.get('start_date')
+        end_date_str = request.GET.get('end_date')
+    sales_data=[
+        ['Date','product','quantity','price','Total'],
+    ]
+    if start_date_str is not None:
+              start_date = datetime.strptime(start_date_str,  '%Y-%m-%d')
+              end_date = datetime.strptime(end_date_str, '%Y-%m-%d')
+              orders = orderitem.objects.filter(Q(orderit__status ='Out_for_delivery') & Q(orderit__created_at__date__gte = start_date) & Q(orderit__created_at__date__lte = end_date))
+    else:
+            orders = orderitem.objects.filter(Q(orderit__status ='Out_for_delivery'))
+
+    for order in orders:
+        sales_data.append([
+            # order.orderit.order.id,
+            order.orderit.created_at.strftime('%m/%d/%Y %I:%M %p'),
+            order.product.name,
+            order.quantity,
+            order.price,
+            order.orderit.total_price
+
+
+
+        ])
+    wb = Workbook()
+    ws= wb.active
+    ws.title='sales Report'
+    for row in sales_data:
+        ws.append(row)
+
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = 'attachment; filename=sales_report.xlsx'
+    wb.save(response)
+    return response
+
+def pdf_dwnld(request):
+    if request.method == 'GET':
+        start_date_str = request.GET.get('start_date')
+        end_date_str = request.GET.get('end_date')
+    if start_date_str is not None:
+            start_date = datetime.strptime(start_date_str,  '%Y-%m-%d')
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d')
+            orders = orderitem.objects.filter(Q(orderit__status ='Out_for_delivery') & Q(orderit__created_at__date__gte = start_date) & Q(orderit__created_at__date__lte = end_date))
+    else:
+         orders = orderitem.objects.filter(Q(orderit__status ='Out_for_delivery'))
+
+
+    # for item in orders:
+    #        date= item.orderit.created_at.strftime('%m/%d/%Y %I:%M %p'),
+    #        product= item.product.name,
+    #        quantity= item.quantity,
+    #        price=item.price,
+    #        totalprice=item.orderit.total_price
+    Grandtotal=0
+    for item in orders:
+    
+        total=item.orderit.total_price
+        Grandtotal=+total+Grandtotal
+    context={'orders':orders,'Grandtotal':Grandtotal}
+    
+    template = get_template('orders/admin_salesreport.html')
+    html = template.render(context)
+    pdf = HttpResponse(content_type='application/pdf')
+    pdf['Content-Disposition'] = f'attachment; filename="order_{"sales report"}_invoice.pdf"'
+    pisa_status = pisa.CreatePDF(html, dest=pdf)
+    if pisa_status.err:
+           return HttpResponse('Error generating PDF')
+
+    return pdf
+
 
 
 

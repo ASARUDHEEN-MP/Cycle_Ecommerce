@@ -12,6 +12,10 @@
     ADMIN
     {% endblock %}
   </title>
+  {% block scripts %}
+  {% endblock %}
+  
+
   <meta content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0, shrink-to-fit=no' name='viewport' />
   <!--     Fonts and icons     -->
   <link href="https://fonts.googleapis.com/css?family=Montserrat:400,700,200" rel="stylesheet" />
@@ -28,6 +32,7 @@
 </head>
 
 <body class="">
+
   <div class="wrapper ">
     <div class="sidebar" data-color="white" data-active-color="danger">
       <div class="logo">
@@ -43,10 +48,12 @@
           </div> -->
         </a>
       </div>
+      
       <div class="sidebar-wrapper">
+        
         <ul class="">
           <li>
-            <td><a href="{% url 'admindashboard' %}"><button class="btn btn-primary btn-lg active "style="width:12em">Dashboard</button></a> </td>
+            <td><a href="{% url 'chart' %}"><button class="btn btn-primary btn-lg active "style="width:12em">Dashboard</button></a> </td>
             </a>
           </li>
           
@@ -55,7 +62,7 @@
             </a>
           </li>
           <li>
-            <td><a href="{% url 'collection_list' %}"><button class="btn btn-primary btn-lg active" style="width:12em">Collections</button></a> </td>
+            <td><a href="{% url 'collection_list' %}"><button class="btn btn-primary btn-lg active" style="width:12em">Product</button></a> </td>
             </a>
           </li>
           <li>
@@ -74,7 +81,10 @@
             <td><a href="{% url 'couponlist' %}"><button class="btn btn-primary btn-lg active"style="width:12em">coupon</button></a> </td>
             </a>
           </li>
-        
+          <li>
+            <td><a href="{% url 'SalesReport' %}"><button class="btn btn-primary btn-lg active"style="width:12em">SalesReport</button></a> </td>
+            </a>
+          </li>
         </ul>
       </div>
     </div>
@@ -94,13 +104,14 @@
           </div>
          
             
-            
+         
             <a href="{% url 'logout' %}"><button class="btn btn-primary">Logout</button></a>
          
           
           <div class="collapse navbar-collapse justify-content-end" id="navigation">
           </div>
-      
+        
+    </div>
    
             {% block body %}
 

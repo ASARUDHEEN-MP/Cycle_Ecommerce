@@ -141,5 +141,5 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
 # # PAYMENT GATEWAY SETTINGS
-# razorpay_id = env('RAZORPAY_ID')
-# razorpay_account_id = env('razorpay_account_id')
+razor_pay_key_id = 'rzp_test_Q76eqQekpYrXb6'
+key_secret = 'YVThyYWz0AaRdOYxnhukMJ01'

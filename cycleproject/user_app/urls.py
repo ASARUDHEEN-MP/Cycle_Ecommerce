@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from .views import GenerateOrderInvoicePDF
 
 
 urlpatterns = [
@@ -37,25 +38,27 @@ urlpatterns = [
 
 path('test',views.test,name="test"),
 path('default/<int:id>',views.default,name="default"),
-path('placeorder',views.placeorder,name="placeorder"),
 path('orderview',views.orderview,name="orderview"),
 path('view_order/<str:tr_id>',views.vieworder,name="vieworder"),
 path('cancelorders/<int:pk>',views.cancelorders,name="cancelorders"),
 path('orderdel',views.orderdel,name="orderdel"),
+path('placeorder',views.placeorder,name="placeorder"),
 
 #onlinepay----------------
-path('proceed-to-pay',views.razorpay),
+path('my_orders',views.my_orders,name="my_orders"),
+# path('proceed-to-pay',views.razorpay),
 path('pay',views.pay,name="pay"),
 
 #test
-path('my-response',views.my_orders,name="my_orders"),
+# path('my-response',views.my_orders,name="my_orders"),
 path('applycoupon',views.applycoupon,name="applycoupon"),
-
-
 path('change_password',views.change_password,name="change_password"),
 path('about',views.about,name="about"),
+#pdf download---------
+path('order/<int:order_id>/invoice/', GenerateOrderInvoicePDF.as_view(), name='generate_order_invoice'),
 
-
+path('payit',views.payit,name="payit"),
+path('verification_payment',views.verification_payment,name="verification_payment")
    
    
 

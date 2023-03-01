@@ -64,10 +64,11 @@ class order(models.Model):
     payment_mode=models.CharField(max_length=250,null=False)
     payment_id=models.CharField(max_length=250,null=True)
     STATUS = (
+         ('Out_for_delivery','Out_for_delivery'),
         ('Confirmed','Confirmed'),
         ('Shipped','Shipped'),
         ('Pending','Pending'),
-        ('Out_for_delivery','Out_for_delivery'),
+       
         ('Delivered','Delivered'),
         ('Cancelled','Cancelled'),
         ('Returned','Returned')

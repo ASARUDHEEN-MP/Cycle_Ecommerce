@@ -1,4 +1,6 @@
 # Create your views here.
+
+from django.conf import settings
 from django.shortcuts import render,redirect
 from . models import *
 from hashlib import sha256
@@ -14,6 +16,10 @@ from django.http import HttpResponse
 import random
 from django.views.decorators.csrf import csrf_exempt,csrf_protect #Add this
 from django.core.validators import EmailValidator
+from django.template.loader import get_template
+from xhtml2pdf import pisa
+from django.views import View
+import razorpay
 
 from.form import send_forget_password_mail
 # Create your views here.
@@ -183,7 +189,7 @@ def product_view(request,cate_slug,prod_slug):
 
 
 
-#cart managment ---------------------------------------------------------------------
+#---------------------------------------cart managment ---------------------------------------------------------------------
 def addtocart(request):
     if request.method=='POST':
         if request.user.is_authenticated:
@@ -219,8 +225,11 @@ def addtocart(request):
 
 def cart(request):
     dd = request.user
+    total=0
     cart_items = carts.objects.filter(user = dd)
-    context={'cart_items':cart_items}
+    for item in cart_items:
+        total +=item.product.price * item.product_qty
+    context={'cart_items':cart_items,'total':total}
     
     return render(request,'user/cartview.html',context)
 
@@ -241,7 +250,7 @@ def updatecart(request):
             cart=carts.objects.get(user_id=users_id,product_id=prod_id)
             cart.product_qty=prod_qty
             cart.save()
-            return JsonResponse({'status':"update to continue"})
+            return JsonResponse({'status':"update successfull"})
         
         return redirect('index')
 
@@ -252,36 +261,28 @@ def checkout(request):
     grand_total = 0
     dd=request.user
     discount = 0
+    
+    
     addrssz=userdetails.objects.filter(is_default=True,user=request.user)
     cartitems=carts.objects.filter(user=dd)
     address=userdetails.objects.filter(user=dd)
 
     for item in cartitems:
         total +=item.product.price * item.product_qty
-    print(total)
+    
     if 'coupons' in request.session:
-        print('coupon')
         coupons=request.session['coupons']
-        print(coupons)
         coup = coupon.objects.get(coupon_code=coupons)
-       
         discount = coup.discount
         print(discount)
         messages.info(request,'')
-        
         Used_Coupon.objects.create(user = user,coupon = coup )
-    
-    
 
-   
-        
-        
-       
-
+    coupen=coupon.objects.all()
     m=total
     grand_total = total-discount
     print(grand_total)
-    context={'cartitems':cartitems,'grand_total':grand_total,'address':address,'addrssz':addrssz,'discount':discount,'m':m}
+    context={'cartitems':cartitems,'grand_total':grand_total,'address':address,'addrssz':addrssz,'discount':discount,'m':m,'coupen':coupen}
     return render(request,'user/usercheckout.html',context)
 
 
@@ -423,43 +424,39 @@ def default(request,id):
 
 @csrf_exempt #This skips csrf validation. Use csrf_protect to have validation
 def placeorder(request):
-    print('first')
-    print('payment_mod')
+
     total=0
     discount=0
     
     cart_total_price = 0
     dd=request.user
-    payment_mod='NOT'
+    payment_mod='cod'
     payment_id='none'
     dd_id=request.user.id
     user_ids=User.objects.get(username=dd)
     addrssz=userdetails.objects.filter(is_default=True,user=request.user)
     cart_ids=carts.objects.filter(user=dd_id)
     tracking_no =( random.randint(100000,999999))
-    if request.method == 'POST':
-      
-        payment_mod= request.POST.get('payment_mode')
-        payment_id= request.POST.get('payment_id')
-        print('second')
-        print(payment_mod)
+    # if request.method == 'POST':
+    #     payment_mod= request.POST.get('payment_mode')
+    #     fname=request.POST.get('')
+        # payment_id= request.POST.get('payment_id')
+       
     if 'coupons' in request.session:
-        print('coupon')
         coupons=request.session['coupons']
         coup = coupon.objects.get(coupon_code=coupons)
         discount = coup.discount
         del request.session['coupons']
-        print(coup.discount)
        
     
-    print('hello')
+
     
     for item in cart_ids:
         cart_total_price=total+item.product.price*item.product_qty
     
 
     cart_total_price -=discount
-    print(cart_total_price)
+   
     orders = order.objects.create(
        user=request.user,
        total_price=cart_total_price,
@@ -484,20 +481,21 @@ def placeorder(request):
     productz.quantity=productz.quantity-item.product_qty
     productz.save()
     cart_ids.delete()
-    messages.info(request,'your oder is successfull')
+
+    return redirect('/')
     
-    ff={
-          'user_ids':user_ids,
-          'addrssz':addrssz,
-          'cart_ids':cart_ids,
-    }
-    paymode=request.POST.get('payment_mode')
-    if (paymode=='COD'):
-        return redirect("/")
-    if(paymode=="paid by razorpay"):
-         return JsonResponse({'status':"your oder is successfull"})
+    # ff={
+    #       'user_ids':user_ids,
+    #       'addrssz':addrssz,
+    #       'cart_ids':cart_ids,
+    # }
+    # # paymode=request.POST.get('payment_mode')
+    # # if (paymode=='COD'):
+    # #     return redirect("/")
+    # # if(paymode=="paid by razorpay"):
+    # #      return JsonResponse({'status':"your oder is successfull"})
         
-    return render(request,'orders/orderview.html',ff)
+    # return render(request,'user/usercheckout.html',ff)
 
 #show myorder
 
@@ -517,9 +515,9 @@ def vieworder(request,tr_id):
     for item in ord_itm:
         pr=item.price
     
-    discount=ord.total_price - pr
+    
  
-    context={'ord':ord,'ord_itm':ord_itm,'discount':discount}
+    context={'ord':ord,'ord_itm':ord_itm}
     
     return render(request,'orders/userorderview.html',context)
 
@@ -544,23 +542,23 @@ def orderdel(request):
     return redirect('orderview')
 
 
-@csrf_exempt
-def razorpay(request):
-    dd=request.user
-    cart=carts.objects.filter(user=dd)
+# @csrf_exempt
+# def razorpay(request):
+#     dd=request.user
+#     cart=carts.objects.filter(user=dd)
     
-    total_price=0
-    for item in cart:
-        total_price=total_price+item.product.price*item.product_qty
+#     total_price=0
+#     for item in cart:
+#         total_price=total_price+item.product.price*item.product_qty
 
 
-    return JsonResponse({
-        'total_price':total_price
-    })
+#     return JsonResponse({
+#         'total_price':total_price
+#     })
     
 @csrf_exempt
 def pay(request):
-    return redirect('placeorder')
+    return redirect('/')
 
 #test
 @csrf_exempt
@@ -580,7 +578,7 @@ def applycoupon(request):
        
         coupons=request.POST.get("coupon")
         coup=coupon.objects.filter(coupon_code=coupons)
-        print(coupons)
+    
      
         print('visted 123opooppo')
         # try:
@@ -593,7 +591,7 @@ def applycoupon(request):
         #     print('jhgjhgjhgjh')
 
         if coup:
-            print('visted')
+            
             request.session['coupons'] = coupons
             return redirect("checkout")
         else:
@@ -664,4 +662,125 @@ def serach_prdct(request):
 #--------------------------about-------------------------------
 def about(request):
     return render(request,'user/About.us.html')
+
+#-----------------------pdfdownload-------------------------------
+
+class GenerateOrderInvoicePDF(View):
+    def get(self, request, *args, **kwargs):
+        # Get order from ID in URL parameters
+    
+        order_id = kwargs.get('order_id')
+        orders = orderitem.objects.get(id=order_id)
+       
+        
+
+        # Render HTML template with order data
+        context = {'orders': orders}
+        template = get_template('orders/user_invoice.html')
+        html = template.render(context)
+
+        # Create PDF response
+        pdf = HttpResponse(content_type='application/pdf')
+        pdf['Content-Disposition'] = f'attachment; filename="order_{orders.id}_invoice.pdf"'
+
+        # Generate PDF from HTML
+        pisa_status = pisa.CreatePDF(html, dest=pdf)
+        if pisa_status.err:
+            return HttpResponse('Error generating PDF')
+
+        return pdf
+
+
+from django.conf import settings
+def payit(request):
+    if request.method == 'POST':
+        payment_mod= request.POST.get('payment_mode')
+        total=int(request.POST.get('total'))
+        phone=request.POST.get('phone')
+        name=request.POST.get('name')
+       
+       
+        client = razorpay.Client(auth=('rzp_test_Q76eqQekpYrXb6','YVThyYWz0AaRdOYxnhukMJ01'))
+
+        DATA = {
+            "amount": total * 100,
+            "currency": "INR",
+            "receipt": "receipt#1",
+            "notes": {
+                "key1": "value3",
+                "key2": "value2"
+            }
+        }
+        payment = client.order.create(data=DATA)
+        context={
+            'payment_mod':payment_mod,
+            'total':total,
+            'phone':phone,'name':name,
+            'id' :str( payment['id']),
+        }
+        return render(request,'pay/payit.html',context)
+  
+
+@csrf_exempt 
+def verification_payment(request):
+    total=0
+    discount=0
+    
+    cart_total_price = 0
+    payment_id= request.POST.get('razorpay_payment_id','')
+    cart_total_price = 0
+    dd=request.user
+    payment_mod='razorpay'
+   
+    dd_id=request.user.id
+    user_ids=User.objects.get(username=dd)
+    addrssz=userdetails.objects.filter(is_default=True,user=request.user)
+    cart_ids=carts.objects.filter(user=dd_id)
+    tracking_no =( random.randint(100000,999999))
+    if 'coupons' in request.session:
+        coupons=request.session['coupons']
+        del request.session['coupons']
+        coup = coupon.objects.get(coupon_code=coupons)
+        discount = coup.discount
+        
+    for item in cart_ids:
+        total+=item.product.price*item.product_qty
+        print(total)
+
+    total -=discount
+   
+    orders = order.objects.create(
+       user=request.user,
+       total_price=total,
+       address=userdetails.objects.get(is_default=True,user=request.user),
+       tracking_no=tracking_no,
+       payment_mode=payment_mod,
+       payment_id=payment_id,
+       status='Confirmed',
+    )
+    orders.save()
+    ordersitem = orderitem.objects.create(
+        user=request.user,
+        orderit=orders,
+        product=item.product,
+        price=item.product.price,
+        quantity=item.product_qty,
+        
+    )
+    ordersitem.save()
+    productz=product_list.objects.filter(id=item.product_id).first()
+    productz.quantity=productz.quantity-item.product_qty
+    productz.save()
+    cart_ids.delete()
+    return redirect('/')
+        
+
+    
+
+        
+    
+
+   
+    # return render(request,'pay/verification.html')
+    
 
